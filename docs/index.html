@@ -217,16 +217,16 @@
       </div>
     </section>
 
-<section id="architecture" class="section content-section">
+  <section id="architecture" class="section content-section">
       <div class="container">
         <h2 class="title is-3 has-text-centered section-title">Current Architecture: The Misalignment</h2>
         <div class="content">
           <p>
-            Most modern efficient architectures (RetNet, Lightning Attention, Mamba-2, GLA) adopt a parallel structure to maximize GPU throughput. In these designs, <strong>ShortConv</strong> is often applied to $Q$, $K$, and $V$ (or Gates/Values) individually before the global operation.
+            Most modern efficient architectures (GLA, Mamba-2, RetNet variants) adopt a parallel structure. The <strong>ShortConv</strong> is applied strictly to the content/state branches ($Q, K, V$ or SSM inputs) to inject local bias, while the <strong>Gate</strong> branch typically bypasses this step to act as a multiplicative control.
           </p>
           
           <div class="diagram-container">
-            <svg viewBox="0 0 600 360" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+            <svg viewBox="0 0 600 380" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
               <defs>
                 <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
                   <polygon points="0 0, 10 3.5, 0 7" fill="#666" />
@@ -234,14 +234,26 @@
               </defs>
 
               <style>
+                /* General Boxes */
                 .box-stroke { fill: #fff; stroke: #0A2540; stroke-width: 2; }
                 .box-fill { fill: #E6F7FF; stroke: #0A2540; stroke-width: 1.5; }
-                .conv-box { fill: #ffeff0; stroke: #ff3860; stroke-width: 1.5; }
+                
+                /* Changed to ORANGE */
+                .conv-box { fill: #FFF3E0; stroke: #FF9800; stroke-width: 1.5; }
+                .text-conv { font-size: 11px; fill: #E65100; text-anchor: middle; font-weight: 700; }
+                .highlight-area { stroke: #FF9800; stroke-width: 2; stroke-dasharray: 6,4; fill: rgba(255, 152, 0, 0.05); rx: 8; }
+                .bottleneck-label { font-size: 12px; fill: #E65100; text-anchor: middle; }
+
+                /* Gate Green */
+                .gate-box { fill: #f0fff4; stroke: #48c774; stroke-width: 1.5; }
+                .text-gate { font-size: 11px; fill: #257942; text-anchor: middle; font-weight: 700; }
+                
+                /* Text & Lines */
                 .text-label { font-size: 14px; fill: #2D2D2D; text-anchor: middle; font-weight: 500; }
                 .text-small { font-size: 12px; fill: #666; text-anchor: middle; }
-                .text-conv { font-size: 11px; fill: #d00; text-anchor: middle; font-weight: 700; }
                 .path-line { stroke: #666; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
-                .highlight-area { stroke: #ff3860; stroke-width: 2; stroke-dasharray: 6,4; fill: rgba(255, 56, 96, 0.03); rx: 8; }
+                .bypass-line { stroke: #48c774; stroke-width: 1.5; fill: none; stroke-dasharray: 4,2; marker-end: url(#arrowhead); }
+                .operator-circle { fill: #fff; stroke: #2D2D2D; stroke-width: 1.5; }
               </style>
 
               <rect x="250" y="10" width="100" height="30" rx="4" class="box-stroke" />
@@ -249,58 +261,68 @@
               <line x1="300" y1="40" x2="300" y2="60" class="path-line" />
 
               <rect x="100" y="60" width="400" height="40" rx="4" class="box-stroke" style="fill:#f0f4f8;" />
-              <text x="300" y="85" class="text-label">Parallel Linear Projection (Q, K, V, Gate)</text>
+              <text x="300" y="85" class="text-label">Parallel Linear Projection</text>
 
-              <line x1="200" y1="100" x2="160" y2="130" class="path-line" /> <line x1="266" y1="100" x2="266" y2="130" class="path-line" /> <line x1="333" y1="100" x2="333" y2="130" class="path-line" /> <line x1="400" y1="100" x2="440" y2="130" class="path-line" /> <rect x="120" y="120" width="360" height="85" class="highlight-area" />
-              <text x="545" y="165" class="text-small" style="fill:#ff3860; font-weight:bold;">← Bottleneck</text>
-              <text x="545" y="180" class="text-small" style="fill:#ff3860;">(Fixed k=4 Conv)</text>
+              <line x1="200" y1="100" x2="160" y2="130" class="path-line" /> <line x1="266" y1="100" x2="266" y2="130" class="path-line" /> <line x1="333" y1="100" x2="333" y2="130" class="path-line" /> <line x1="400" y1="100" x2="480" y2="130" class="path-line" /> <rect x="120" y="120" width="280" height="85" class="highlight-area" />
+              <text x="50" y="165" class="bottleneck-label" style="font-weight:bold;">Bottleneck →</text>
+              <text x="50" y="180" class="bottleneck-label">(Fixed k=4)</text>
 
               <g transform="translate(0, 0)">
-                 <text x="160" y="125" class="text-small" style="font-weight:bold;">Q / Gate</text>
+                 <text x="160" y="125" class="text-small" style="font-weight:bold;">Q / x</text>
                  <rect x="130" y="130" width="60" height="30" rx="4" class="conv-box" />
                  <text x="160" y="150" class="text-conv">ShortConv</text>
 
-                 <text x="266" y="125" class="text-small" style="font-weight:bold;">K</text>
+                 <text x="266" y="125" class="text-small" style="font-weight:bold;">K / B</text>
                  <rect x="236" y="130" width="60" height="30" rx="4" class="conv-box" />
                  <text x="266" y="150" class="text-conv">ShortConv</text>
 
-                 <text x="333" y="125" class="text-small" style="font-weight:bold;">V</text>
+                 <text x="333" y="125" class="text-small" style="font-weight:bold;">V / C</text>
                  <rect x="303" y="130" width="60" height="30" rx="4" class="conv-box" />
                  <text x="333" y="150" class="text-conv">ShortConv</text>
+              </g>
 
-                 <text x="440" y="125" class="text-small" style="font-weight:bold;">Decay/G</text>
-                 <rect x="410" y="130" width="60" height="30" rx="4" class="box-fill" />
-                 <text x="440" y="150" class="text-small">Linear</text>
+              <g transform="translate(0, 0)">
+                 <text x="480" y="125" class="text-small" style="font-weight:bold; fill:#257942;">Gate (z)</text>
+                 <rect x="450" y="130" width="60" height="30" rx="4" class="gate-box" />
+                 <text x="480" y="150" class="text-gate">SiLU / Act</text>
+                 
+                 <path d="M 480 160 L 480 300 L 325 300" class="bypass-line" />
+                 <text x="510" y="230" class="text-small" style="fill:#48c774;">No Conv</text>
               </g>
 
               <line x1="160" y1="160" x2="220" y2="210" class="path-line" />
               <line x1="266" y1="160" x2="280" y2="210" class="path-line" />
               <line x1="333" y1="160" x2="320" y2="210" class="path-line" />
-              <line x1="440" y1="160" x2="380" y2="210" class="path-line" />
 
               <rect x="180" y="210" width="240" height="50" rx="4" class="box-stroke" style="fill:#0A2540;" />
               <text x="300" y="235" class="text-label" style="fill:#fff;">Global Mixer</text>
-              <text x="300" y="250" class="text-small" style="fill:#aaa;">(RetNet / Lightning / SSM)</text>
+              <text x="300" y="250" class="text-small" style="fill:#aaa;">(Chunked Linear Attn / SSM)</text>
 
-              <line x1="300" y1="260" x2="300" y2="290" class="path-line" />
+              <line x1="300" y1="260" x2="300" y2="288" class="path-line" />
+
+              <circle cx="300" cy="300" r="12" class="operator-circle" />
+              <text x="300" y="304" font-size="14" font-weight="bold" text-anchor="middle">×</text>
+
+              <line x1="300" y1="312" x2="300" y2="330" class="path-line" />
               
-              <rect x="250" y="290" width="100" height="30" rx="4" class="box-stroke" />
-              <text x="300" y="310" class="text-label">Output (y)</text>
+              <rect x="250" y="330" width="100" height="30" rx="4" class="box-stroke" />
+              <text x="300" y="350" class="text-label">Output (y)</text>
 
             </svg>
-            <span class="mini-caption">Figure 1: The standard parallel pipeline (RetNet, Lightning Attention, etc.). The "Local Mixing" (ShortConv on Q, K, V) is the bottleneck we target.</span>
+            <span class="mini-caption">Figure 1: The standard parallel pipeline. ShortConv is applied to Q, K, V (or SSM inputs), while the Gate (z) completely bypasses the local mixing bottleneck.</span>
           </div>
 
           <h4 class="title is-5">The Standard Pipeline</h4>
           <ol>
-              <li><strong>Parallel Linear Projection:</strong> Input $u$ is projected into multiple branches (Query, Key, Value, Gate) simultaneously.</li>
-              <li><strong>Local Mixing (The Bottleneck):</strong> A fixed-kernel <code>Conv1d(k=4)</code> is applied independently to $Q$, $K$, and $V$ to provide local inductive bias.</li>
-              <li><strong>Global Mixing (Chunked):</strong> The processed branches enter the core retention or linear attention mechanism, computed via Tensor Cores in chunks (e.g., block size 128).</li>
+              <li><strong>Parallel Linear Projection:</strong> Input $u$ splits into mixing branches ($Q, K, V$ or $x, B, C$) and a multiplicative Gate branch ($z$).</li>
+              <li><strong>Local Mixing (The Bottleneck):</strong> A fixed <code>Conv1d(k=4)</code> is applied to the mixing branches to enforce local smoothness. <strong>Note that the Gate branch bypasses this step.</strong></li>
+              <li><strong>Global Mixing:</strong> The convolved branches enter the global operator (SSM or Linear Attn), computed in chunks.</li>
+              <li><strong>Gating:</strong> The output of the mixer is multiplied by the Gate branch.</li>
           </ol>
 
           <div class="message is-warning" style="margin-top: 2rem;">
             <div class="message-body">
-              <strong>The Misalignment:</strong> While the Global Mixer loads a large chunk (128 tokens) into SRAM, the <strong>ShortConv</strong> on $Q, K, V$ acts as a blinder, restricting the local receptive field to just 4 tokens. We pay the memory cost for the full chunk but fail to utilize it for local mixing.
+              <strong>The Misalignment:</strong> We load a 128-token chunk into SRAM for the Global Mixer. However, the branches feeding into it ($Q, K, V$) are restricted by the <strong>ShortConv</strong> (k=4). Even though the memory is already hot, we fail to perform attention across the full chunk <em>before</em> the global mixing step.
             </div>
           </div>
         </div>
