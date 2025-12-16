@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rethinking SWA: Why Short Sliding Window Attention Will Replace ShortConv</title>
+
+  <meta name="description" content="In the era of hardware-efficient chunk-based computation, ShortConv (k=4) is an architectural mismatch. We propose replacing it with chunk-aligned Short Sliding Window Attention (ShortSWA).">
+  <meta name="keywords" content="SWA, ShortConv, Sliding Window Attention, SSM, Mamba, Transformers, Deep Learning, Hardware Efficiency, FlashAttention">
+  <meta name="author" content="Yifan Zhang">
+  <meta name="citation_title" content="Rethinking SWA">
+  <meta name="citation_author" content="Yifan Zhang">
+  <meta name="citation_publication_date" content="2025/12/16">
+  <meta property="og:title" content="Rethinking SWA"/>
+  <meta property="og:description" content="Why Short Sliding Window Attention Will Replace ShortConv in Modern Architectures."/>
+  <meta property="og:type" content="website"/>
+  <meta property="og:url" content="https://github.com/yifanzhang-pro/Rethinking-SWA"/>
+  <link rel="canonical" href="https://github.com/yifanzhang-pro/Rethinking-SWA">
+  
+  <link rel="icon" href="https://placehold.co/32x32/0A2540/FFFFFF?text=S" type="image/x-icon">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.4/css/bulma.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
+  <script>
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+
+  <style>
+    :root{
+      --primary-color:#0A2540;    /* Deep Navy */
+      --accent-color:#00C2FF;     /* Cyan Accent */
+      --main-bg:#FFFFFF;
+      --content-bg:#F6F8FA;
+      --text-main:#2D2D2D;
+      --text-on-primary:#FFFFFF;
+      --link-color:var(--primary-color);
+      --link-hover-color:#143E73;
+      --primary-color-rgb:10,37,64;
+      --link-color-rgb:10,37,64;
+      --border-color:#e5e7eb;
+      --shadow-color:rgba(0,0,0,0.1);
+    }
+
+    html{scroll-behavior:smooth}
+    body{
+      font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color:var(--text-main); background:var(--main-bg);
+      display:flex; flex-direction:column; min-height:100vh;
+      text-rendering:optimizeLegibility; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+
+    /* Navbar */
+    .navbar{
+      background:rgba(var(--primary-color-rgb),0.92);
+      backdrop-filter:blur(10px);
+      box-shadow:0 2px 5px var(--shadow-color);
+      position:sticky; top:0; z-index:100;
+    }
+    .navbar .navbar-item, .navbar .navbar-link{ color:var(--text-on-primary); font-weight:500; }
+    .navbar a.navbar-item:hover, .navbar .navbar-link:hover, .navbar-item.is-active{ color:var(--accent-color)!important; background:transparent!important; }
+    .navbar-burger{ color:var(--text-on-primary); }
+
+    /* Hero */
+    .hero{ background:linear-gradient(180deg, #0A2540 0%, #0e3055 100%); color:var(--text-on-primary); }
+    .hero .title{
+      font-family:'Space Grotesk', sans-serif; font-weight:700; color:var(--text-on-primary);
+      font-size:3.0rem; line-height:1.1;
+    }
+    .hero .subtitle.is-hero-subtitle{
+      color:rgba(255,255,255,0.92); font-size:1.18rem; max-width:980px; margin:1.25rem auto 2rem auto;
+    }
+    .hero .subtitle .highlight{ color:var(--accent-color); font-weight:600; }
+
+    .project-links a{ color:var(--text-on-primary); font-size:1.45rem; margin:0 0.6rem; transition:transform .25s ease, color .25s ease; }
+    .project-links a:hover{ color:var(--accent-color); transform:translateY(-2px); }
+
+    /* Authors */
+    .authors-list { font-size: 1.25rem; line-height: 1.6; margin-top: 1rem; color: rgba(255,255,255,0.95); font-weight: 500; }
+    .date-display { font-size: 0.95rem; color: rgba(255,255,255,0.7); margin-top: 0.5rem; font-style: italic;}
+
+    /* Sections */
+    .section.content-section{ padding:4.5rem 1.25rem; border-bottom:1px solid var(--border-color); }
+    .section.content-section:nth-child(even){ background:var(--content-bg); }
+    .section-title{
+      font-family:'Space Grotesk', sans-serif; font-weight:700; color:var(--primary-color);
+      margin-bottom:2.2rem;
+    }
+    .content{ max-width:1000px; margin:0 auto; line-height:1.8; font-size:1.06rem; }
+    .content a{ color:var(--link-color); font-weight:500; text-decoration:none; border-bottom:2px solid rgba(var(--link-color-rgb),.2); }
+    .content a:hover{ color:var(--link-hover-color); border-bottom-color:var(--link-hover-color); }
+    .content img{ display:block; margin:1.75rem auto; max-width:100%; border-radius:10px; box-shadow:0 4px 15px rgba(0,0,0,0.08); }
+
+    /* Code & Pre */
+    .content pre{
+      background:#0f172a; color:#cbd5e1; border-radius:8px; padding:1.1em 1.2em;
+      overflow:auto; box-shadow:inset 0 0 0 1px rgba(255,255,255,0.04);
+      font-size:0.95rem;
+    }
+    code{ background:#f2f4f7; color:#1f2937; padding:0.18em 0.38em; border-radius:4px; font-size:85%; }
+    pre code{ background:transparent; color:inherit; padding:0; font-size:inherit; }
+
+    /* Custom Boxes for "Pillars" */
+    .pillar-box {
+        background: #fff; border: 1px solid var(--border-color); border-radius: 8px;
+        padding: 1.5rem; height: 100%; transition: transform 0.2s;
+    }
+    .pillar-box:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.05); }
+
+    /* Badges */
+    .pill{ display:inline-block; padding:.35rem .6rem; border-radius:999px; font-size:.82rem; background:#E6F7FF; color:#0A2540; margin:.15rem .25rem; border:1px solid #C8ECFF; }
+
+    /* Footer */
+    .footer{
+      background:var(--primary-color); color:var(--text-on-primary);
+      padding:2rem 1.5rem; border-top:3px solid var(--accent-color); margin-top:auto;
+    }
+    .footer a{ color:var(--accent-color); font-weight:500; }
+    .footer a:hover{ color:#ffffff; }
+
+    /* Utility */
+    .mini-caption{ display:block; margin-top:.35rem; color:#6b7280; font-style:italic; text-align:center;}
+    
+    /* SVG Styling */
+    .diagram-container {
+        width: 100%;
+        margin: 2rem 0;
+        text-align: center;
+        background: #fff;
+        border: 1px solid #eee;
+        border-radius: 8px;
+        padding: 1rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+    }
+    svg text { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body>
+
+  <nav class="navbar" role="navigation" aria-label="main navigation">
+    <div class="container">
+      <div class="navbar-brand">
+        <a class="navbar-item is-size-5 has-text-weight-bold" href="#">Rethinking SWA</a>
+        <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarMenu">
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+        </a>
+      </div>
+      <div id="navbarMenu" class="navbar-menu">
+        <div class="navbar-end">
+          <a href="#intro" class="navbar-item">Overview</a>
+          <a href="#architecture" class="navbar-item">Architecture</a>
+          <a href="#upgrade" class="navbar-item">Why SWA?</a>
+          <a href="#implementation" class="navbar-item">Implementation</a>
+          <a href="#citation" class="navbar-item">Citation</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero is-medium">
+    <div class="hero-body">
+      <div class="container has-text-centered">
+        <h1 class="title">Rethinking SWA</h1>
+        <h2 class="subtitle is-hero-subtitle">
+          Why <span class="highlight">Short Sliding Window Attention</span> Will Replace <span class="highlight">ShortConv</span> in Modern Architectures
+        </h2>
+        
+        <div class="authors-list">
+           Yifan Zhang
+        </div>
+        <div class="date-display">
+           December 16, 2025
+        </div>
+
+        <div class="project-links" style="margin-top:1.5rem;">
+          <a href="https://github.com/yifanzhang-pro/Rethinking-SWA" target="_blank" rel="noopener" aria-label="GitHub Repository"><i class="fab fa-github"></i></a>
+          <a href="#citation" aria-label="Citation"><i class="fas fa-quote-right"></i></a>
+        </div>
+        <div style="margin-top:1.25rem;">
+          <span class="pill">Sequence Modeling</span>
+          <span class="pill">Hardware Efficiency</span>
+          <span class="pill">Mamba / SSM</span>
+          <span class="pill">FlashAttention</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="intro" class="section content-section">
+      <div class="container">
+        <h2 class="title is-3 has-text-centered section-title">The Core Claim</h2>
+        <div class="content has-text-justified" style="max-width:880px;">
+          <p>
+            In the rapid evolution of efficient sequence modeling—whether modern RNNs, state space models (SSMs), linear attention, or even standard full attention—optimization efforts have largely focused on the <strong>global mixing mechanism</strong>. Yet, an inconspicuous legacy artifact remains: <strong>ShortConv</strong> (short convolution).
+          </p>
+          <div class="notification is-light is-info" style="border-left: 4px solid var(--primary-color);">
+            <strong>The Argument:</strong> In an era where hardware-efficient algorithms (e.g., FlashAttention, SSD) mandate chunk-based computation, using convolutions with $k=3$ or $4$ is an architectural mismatch. Since we already split sequences into chunks (e.g., 64 or 128 tokens), we should replace ShortConv with <strong>Short Sliding Window Attention (ShortSWA)</strong>.
+          </div>
+          <p>
+            This shift mirrors the transition in vision backbones where ViT and Swin styles replaced small, fixed-kernel convolutions. ShortSWA upgrades the local mixer from fixed, tiny receptive fields to <strong>data-dependent, chunk-aligned receptive fields</strong>, substantially improving local modeling capability without materially increasing cost.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="architecture" class="section content-section">
+      <div class="container">
+        <h2 class="title is-3 has-text-centered section-title">Current Architecture: The Misalignment</h2>
+        <div class="content">
+          <p>
+            Most modern efficient architectures (RetNet, Lightning Attention, Mamba-2, GLA, GDN) adopt a parallel structure to maximize GPU throughput.
+          </p>
+          
+          <div class="diagram-container">
+            <svg viewBox="0 0 600 320" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+              <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+                  <polygon points="0 0, 10 3.5, 0 7" fill="#666" />
+                </marker>
+              </defs>
+
+              <style>
+                .box-stroke { fill: #fff; stroke: #0A2540; stroke-width: 2; }
+                .box-fill { fill: #E6F7FF; stroke: #0A2540; stroke-width: 1.5; }
+                .text-label { font-size: 14px; fill: #2D2D2D; text-anchor: middle; font-weight: 500; }
+                .text-small { font-size: 12px; fill: #666; text-anchor: middle; }
+                .path-line { stroke: #666; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+                .highlight-box { stroke: #00C2FF; stroke-width: 2.5; stroke-dasharray: 5,5; fill: none; rx: 5;}
+              </style>
+
+              <rect x="250" y="10" width="100" height="30" rx="4" class="box-stroke" />
+              <text x="300" y="30" class="text-label">Input (u)</text>
+              <line x1="300" y1="40" x2="300" y2="60" class="path-line" />
+
+              <rect x="150" y="60" width="300" height="40" rx="4" class="box-stroke" style="fill:#f0f4f8;" />
+              <text x="300" y="85" class="text-label">Parallel Linear Projection</text>
+
+              <line x1="300" y1="100" x2="200" y2="130" class="path-line" />
+              <line x1="300" y1="100" x2="400" y2="130" class="path-line" />
+              <line x1="300" y1="100" x2="300" y2="130" class="path-line" />
+
+              <g transform="translate(0, 0)">
+                 <rect x="180" y="125" width="240" height="60" class="highlight-box" />
+                 
+                 <rect x="190" y="130" width="60" height="30" rx="4" class="box-fill" />
+                 <text x="220" y="150" class="text-small">Gate</text>
+                 
+                 <rect x="270" y="130" width="60" height="30" rx="4" class="box-fill" style="fill:#ffeff0; stroke:#ff3860;" />
+                 <text x="300" y="150" class="text-small" style="fill:#d00;">Conv/SWA</text>
+
+                 <rect x="350" y="130" width="60" height="30" rx="4" class="box-fill" />
+                 <text x="380" y="150" class="text-small">Value</text>
+                 
+                 <text x="495" y="150" class="text-small" style="fill:#00C2FF; font-weight:bold;">← Local Mixing</text>
+              </g>
+
+              <line x1="220" y1="160" x2="280" y2="200" class="path-line" />
+              <line x1="300" y1="160" x2="300" y2="200" class="path-line" />
+              <line x1="380" y1="160" x2="320" y2="200" class="path-line" />
+
+              <rect x="200" y="200" width="200" height="50" rx="4" class="box-stroke" style="fill:#0A2540;" />
+              <text x="300" y="230" class="text-label" style="fill:#fff;">Global Mixer (SSM/Attn)</text>
+              <text x="300" y="245" class="text-small" style="fill:#aaa;">Chunked Computation</text>
+
+              <line x1="300" y1="250" x2="300" y2="280" class="path-line" />
+              
+              <rect x="250" y="280" width="100" height="30" rx="4" class="box-stroke" />
+              <text x="300" y="300" class="text-label">Output (y)</text>
+
+            </svg>
+            <span class="mini-caption">Figure 1: The standard parallel pipeline. The "Local Mixing" step is the bottleneck we target.</span>
+          </div>
+
+          <h4 class="title is-5">The Standard Pipeline</h4>
+          <ol>
+              <li><strong>Parallel Input Projection:</strong> Input $u$ passes through a large Linear layer producing all branches (Gate, Value, Key, etc.).</li>
+              <li><strong>Local Mixing (The Bottleneck):</strong> Each branch goes through a <code>Conv1d(k=2 or 4)</code> for local smoothing.</li>
+              <li><strong>Global Mixing (Chunked):</strong> The core mechanism (SSM, Linear Attn) processes data in chunks using Tensor Cores.</li>
+          </ol>
+
+          <div class="message is-warning" style="margin-top: 2rem;">
+            <div class="message-body">
+              <strong>The Misalignment:</strong> The global mixer operates on chunks (typically $Q=64$ or $128$). We pay the memory cost to load a 128-token chunk into SRAM, yet we restrict the local receptive field to a convolution kernel spanning only 4 tokens. <strong>This wastes the opportunity provided by the hardware access pattern.</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="upgrade" class="section content-section">
+      <div class="container">
+        <h2 class="title is-3 has-text-centered section-title">Why ShortSWA is Inevitable</h2>
+        <div class="content">
+            <p class="has-text-centered mb-6">The case for replacing ShortConv with ShortSWA rests on three pillars: hardware efficiency, modeling capacity, and empirical intuition.</p>
+            
+            <div class="columns is-multiline">
+                <div class="column is-4">
+                    <div class="pillar-box">
+                        <h4 class="title is-5 has-text-weight-bold" style="color:var(--primary-color);">1. Hardware Alignment</h4>
+                        <p><strong>ShortConv ($k=4$)</strong> is memory-bound; it loads data but performs very little arithmetic.</p>
+                        <hr style="margin: 1rem 0;">
+                        <p><strong>ShortSWA ($w=128$)</strong> runs dense local attention inside the chunk. Since data is already in SRAM/registers for the global mixer, the incremental cost of intra-chunk attention is small relative to expressive gains.</p>
+                    </div>
+                </div>
+                <div class="column is-4">
+                    <div class="pillar-box">
+                        <h4 class="title is-5 has-text-weight-bold" style="color:var(--primary-color);">2. Filling the Gap</h4>
+                        <p><strong>ShortConv</strong> only captures tokens $t-1$ to $t-3$. <strong>Global Mixers</strong> (SSMs) excel at recurrence but may attenuate at medium distances.</p>
+                        <hr style="margin: 1rem 0;">
+                        <p><strong>ShortSWA</strong> fills the mid-range gap. A 128-token window captures sentence-level or clause-level context precisely, reducing the burden on the global mixer.</p>
+                    </div>
+                </div>
+                <div class="column is-4">
+                    <div class="pillar-box">
+                        <h4 class="title is-5 has-text-weight-bold" style="color:var(--primary-color);">3. Empirical Intuition</h4>
+                        <p><strong>ShortConv</strong> is fixed and stencil-like. It is good for smoothing, but bad for selective routing.</p>
+                        <hr style="margin: 1rem 0;">
+                        <p><strong>ShortSWA</strong> is content-adaptive. It supports copying, alignment, and delimiter-aware routing. As seen in Vision (ConvNeXt vs Swin), dynamic mixers win when scaling is efficient.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="implementation" class="section content-section">
+      <div class="container">
+        <h2 class="title is-3 has-text-centered section-title">Implementation & Generality</h2>
+        <div class="content">
+          <p>
+            The replacement applies to both SSMs (creating a Local-Global hybrid) and standard Transformers (replacing early positional mixing).
+          </p>
+
+          <div class="diagram-container">
+            <svg viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                  <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#eee" stroke-width="1"/>
+                </pattern>
+              </defs>
+              <style>
+                .chunk-bar { fill: #E6F7FF; stroke: #0A2540; stroke-width: 1; }
+                .conv-highlight { fill: #FF3860; opacity: 0.2; }
+                .swa-highlight { fill: #00C2FF; opacity: 0.2; }
+                .label-text { font-size: 13px; font-weight: 600; fill: #0A2540; }
+                .sub-text { font-size: 11px; fill: #666; }
+              </style>
+
+              <text x="30" y="30" class="label-text">SRAM Memory Load (Chunk Size = 128)</text>
+              <rect x="30" y="40" width="540" height="30" rx="4" class="chunk-bar" />
+              <text x="300" y="60" text-anchor="middle" class="sub-text">128 Tokens available in fast memory</text>
+
+              <g transform="translate(30, 90)">
+                <text x="0" y="15" class="label-text">ShortConv (Old)</text>
+                <rect x="0" y="25" width="240" height="40" stroke="#ccc" fill="white" rx="4"/>
+                <rect x="180" y="25" width="20" height="40" fill="#FF3860" opacity="0.8" />
+                <text x="120" y="50" text-anchor="middle" class="sub-text">k=4 (Fixed weights)</text>
+                <text x="120" y="80" text-anchor="middle" class="sub-text" style="fill:#FF3860; font-weight:bold;">Wasted Context</text>
+              </g>
+
+              <g transform="translate(330, 90)">
+                <text x="0" y="15" class="label-text">ShortSWA (New)</text>
+                <rect x="0" y="25" width="240" height="40" stroke="#ccc" fill="white" rx="4"/>
+                <rect x="0" y="25" width="240" height="40" fill="#00C2FF" opacity="0.3" />
+                <rect x="0" y="25" width="240" height="40" stroke="#00C2FF" stroke-dasharray="4,2" fill="none"/>
+                
+                <text x="120" y="50" text-anchor="middle" class="sub-text" style="fill:#004080;">Full Window Attention</text>
+                <text x="120" y="80" text-anchor="middle" class="sub-text" style="fill:#00C2FF; font-weight:bold;">100% Context Utilization</text>
+              </g>
+            </svg>
+            <span class="mini-caption">Figure 2: Visualizing the "Misalignment". ShortConv ignores the vast majority of the data already loaded into memory. ShortSWA utilizes the full chunk.</span>
+          </div>
+
+          <h4 class="title is-5">Conceptual Code (PyTorch-like)</h4>
+          <pre><code class="language-python">class ModernBlockWithSWA(nn.Module):
+    def forward(self, u):
+        # 1. Parallel projection (standard in Mamba-2, GLA, Transformers)
+        # Generate all branches at once: Gates, Values, Keys, etc.
+        z, x, B, C, ... = self.in_proj(u).split(...)
+
+        # 2. Local mixing: UPGRADED
+        # Old: x = conv1d(x, k=4)
+        # New: chunk-aligned ShortSWA
+        # Window size = 128 (matching the chunk length of global mixer)
+        x = self.short_swa(x, window_size=128)
+
+        # Note: ShortSWA can be implemented efficiently using FlashAttention's
+        # sliding-window or block-masking capabilities.
+
+        # 3. Global mixing (the core heavy lifting)
+        # Could be SSM (SSD), linear attention, or full attention
+        y = self.global_mixer(x, B, C, ...)
+
+        # 4. Gating and output
+        y = y * F.silu(z)
+        return self.out_proj(y)</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="conclusion" class="section content-section">
+      <div class="container">
+        <h2 class="title is-3 has-text-centered section-title">Conclusion</h2>
+        <div class="content has-text-centered" style="max-width:800px; margin:0 auto;">
+          <p>
+            ShortConv was a necessary bridge, but it has become a bottleneck. Whether you are building the next-generation Mamba, designing a linear Transformer, or optimizing a full-attention model: <strong>if your hardware loads a 128-token chunk, your local mixer should exploit all 128 tokens.</strong>
+          </p>
+          <div class="box has-background-light" style="margin-top:2rem;">
+            <p class="is-italic has-text-weight-medium">
+              "ShortConv is to ShortSWA what modern ConvNeXt is to ViT. A strong baseline that becomes structurally disadvantaged once dynamic, windowed attention is implemented efficiently at scale."
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="citation" class="section content-section">
+      <div class="container">
+        <h2 class="title is-3 has-text-centered section-title">Citation</h2>
+        <div class="content">
+<pre id="cite-bibtex"><code>@article{zhang2025rethink,
+  title = {Rethinking SWA},
+  author = {Zhang, Yifan},
+  journal = {yifanzhang-pro.github.io},
+  year = {2025},
+  month = {December},
+  url = "https://github.com/yifanzhang-pro/Rethinking-SWA"
+}</code></pre>
+          <p>
+            <button id="copy-cite" class="button is-small is-link is-light">
+              <span class="icon"><i class="fas fa-clipboard"></i></span>
+              <span>Copy BibTeX</span>
+            </button>
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="content has-text-centered">
+        <p>
+          <a href="#intro">Overview</a> &nbsp;&bull;&nbsp;
+          <a href="#architecture">Architecture</a> &nbsp;&bull;&nbsp;
+          <a href="#upgrade">Why SWA</a> &nbsp;&bull;&nbsp;
+          <a href="#citation">Citation</a>
+        </p>
+        <p>&copy; 2025 Yifan Zhang. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Mobile navbar toggle
+    document.addEventListener('DOMContentLoaded', () => {
+      const $burgers = Array.from(document.querySelectorAll('.navbar-burger'));
+      $burgers.forEach(el => {
+        el.addEventListener('click', () => {
+          const target = el.dataset.target;
+          const $target = document.getElementById(target);
+          el.classList.toggle('is-active');
+          $target.classList.toggle('is-active');
+        });
+      });
+
+      // Hex -> rgb helper
+      function hexToRgb(hex){
+        const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return m ? { r:parseInt(m[1],16), g:parseInt(m[2],16), b:parseInt(m[3],16) } : null;
+      }
+      const root = document.documentElement;
+      const styles = getComputedStyle(root);
+      const p = styles.getPropertyValue('--primary-color').trim();
+      const l = styles.getPropertyValue('--link-color').trim();
+      const prgb = hexToRgb(p), lrgb = hexToRgb(l);
+      if(prgb){ root.style.setProperty('--primary-color-rgb', `${prgb.r}, ${prgb.g}, ${prgb.b}`); }
+      if(lrgb){ root.style.setProperty('--link-color-rgb', `${lrgb.r}, ${lrgb.g}, ${lrgb.b}`); }
+
+      // Copy BibTeX
+      const btn = document.getElementById('copy-cite');
+      const pre = document.getElementById('cite-bibtex');
+      if(btn && pre){
+        btn.addEventListener('click', async () => {
+          const text = pre.innerText;
+          try{
+            await navigator.clipboard.writeText(text);
+            btn.classList.add('is-success');
+            btn.classList.remove('is-link','is-light');
+            btn.innerHTML = '<span class="icon"><i class="fas fa-check"></i></span><span>Copied</span>';
+            setTimeout(() => {
+              btn.classList.remove('is-success');
+              btn.classList.add('is-link','is-light');
+              btn.innerHTML = '<span class="icon"><i class="fas fa-clipboard"></i></span><span>Copy BibTeX</span>';
+            }, 1600);
+          }catch(e){
+            const range = document.createRange();
+            range.selectNode(pre);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            try{ document.execCommand('copy'); }catch(_){}
+            sel.removeAllRanges();
+          }
+        });
+      }
+    });
+  </script>
+
+</body>
+</html>
