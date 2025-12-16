@@ -208,7 +208,7 @@
             In the rapid evolution of efficient sequence modeling, whether modern RNNs, state space models (SSMs), linear attention, or even standard full attention, optimization efforts have largely focused on the <strong>global mixing mechanism</strong>. Yet, an inconspicuous legacy artifact remains: <strong>ShortConv</strong> (short convolution).
           </p>
           <div class="notification is-light is-info" style="border-left: 4px solid var(--primary-color);">
-            <strong>The Argument:</strong> In an era where hardware-efficient algorithms (e.g., FlashAttention, SSD) mandate chunk-based computation, using convolutions with $k=3$ or $4$ is an architectural mismatch. Since we already split sequences into chunks (e.g., 64 or 128 tokens), we should replace ShortConv with <strong>Short Sliding Window Attention (ShortSWA)</strong>.
+            <strong>The Argument:</strong> In an era where hardware-efficient algorithms (e.g., FlashAttention, SSD) mandate chunk-based computation, using convolutions with $k=2$ or $4$ is an architectural mismatch. Since we already split sequences into chunks (e.g., 64 or 128 tokens), we should replace ShortConv with <strong>Short Sliding Window Attention (ShortSWA)</strong>.
           </div>
           <p>
             This shift mirrors the transition in vision backbones where ViT and Swin styles replaced small, fixed-kernel convolutions. ShortSWA upgrades the local mixer from fixed, tiny receptive fields to <strong>data-dependent, chunk-aligned receptive fields</strong>, substantially improving local modeling capability without materially increasing cost.
@@ -217,16 +217,16 @@
       </div>
     </section>
 
-    <section id="architecture" class="section content-section">
+<section id="architecture" class="section content-section">
       <div class="container">
         <h2 class="title is-3 has-text-centered section-title">Current Architecture: The Misalignment</h2>
         <div class="content">
           <p>
-            Most modern efficient architectures (RetNet, Lightning Attention, Mamba-2, GLA, GDN) adopt a parallel structure to maximize GPU throughput.
+            Most modern efficient architectures (RetNet, Lightning Attention, Mamba-2, GLA) adopt a parallel structure to maximize GPU throughput. In these designs, <strong>ShortConv</strong> is often applied to $Q$, $K$, and $V$ (or Gates/Values) individually before the global operation.
           </p>
           
           <div class="diagram-container">
-            <svg viewBox="0 0 600 320" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+            <svg viewBox="0 0 600 360" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
               <defs>
                 <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
                   <polygon points="0 0, 10 3.5, 0 7" fill="#666" />
@@ -236,65 +236,71 @@
               <style>
                 .box-stroke { fill: #fff; stroke: #0A2540; stroke-width: 2; }
                 .box-fill { fill: #E6F7FF; stroke: #0A2540; stroke-width: 1.5; }
+                .conv-box { fill: #ffeff0; stroke: #ff3860; stroke-width: 1.5; }
                 .text-label { font-size: 14px; fill: #2D2D2D; text-anchor: middle; font-weight: 500; }
                 .text-small { font-size: 12px; fill: #666; text-anchor: middle; }
+                .text-conv { font-size: 11px; fill: #d00; text-anchor: middle; font-weight: 700; }
                 .path-line { stroke: #666; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
-                .highlight-box { stroke: #00C2FF; stroke-width: 2.5; stroke-dasharray: 5,5; fill: none; rx: 5;}
+                .highlight-area { stroke: #ff3860; stroke-width: 2; stroke-dasharray: 6,4; fill: rgba(255, 56, 96, 0.03); rx: 8; }
               </style>
 
               <rect x="250" y="10" width="100" height="30" rx="4" class="box-stroke" />
               <text x="300" y="30" class="text-label">Input (u)</text>
               <line x1="300" y1="40" x2="300" y2="60" class="path-line" />
 
-              <rect x="150" y="60" width="300" height="40" rx="4" class="box-stroke" style="fill:#f0f4f8;" />
-              <text x="300" y="85" class="text-label">Parallel Linear Projection</text>
+              <rect x="100" y="60" width="400" height="40" rx="4" class="box-stroke" style="fill:#f0f4f8;" />
+              <text x="300" y="85" class="text-label">Parallel Linear Projection (Q, K, V, Gate)</text>
 
-              <line x1="300" y1="100" x2="200" y2="130" class="path-line" />
-              <line x1="300" y1="100" x2="400" y2="130" class="path-line" />
-              <line x1="300" y1="100" x2="300" y2="130" class="path-line" />
+              <line x1="200" y1="100" x2="160" y2="130" class="path-line" /> <line x1="266" y1="100" x2="266" y2="130" class="path-line" /> <line x1="333" y1="100" x2="333" y2="130" class="path-line" /> <line x1="400" y1="100" x2="440" y2="130" class="path-line" /> <rect x="120" y="120" width="360" height="85" class="highlight-area" />
+              <text x="545" y="165" class="text-small" style="fill:#ff3860; font-weight:bold;">← Bottleneck</text>
+              <text x="545" y="180" class="text-small" style="fill:#ff3860;">(Fixed k=4 Conv)</text>
 
               <g transform="translate(0, 0)">
-                 <rect x="180" y="125" width="240" height="60" class="highlight-box" />
-                 
-                 <rect x="190" y="130" width="60" height="30" rx="4" class="box-fill" />
-                 <text x="220" y="150" class="text-small">Gate</text>
-                 
-                 <rect x="270" y="130" width="60" height="30" rx="4" class="box-fill" style="fill:#ffeff0; stroke:#ff3860;" />
-                 <text x="300" y="150" class="text-small" style="fill:#d00;">Conv/SWA</text>
+                 <text x="160" y="125" class="text-small" style="font-weight:bold;">Q / Gate</text>
+                 <rect x="130" y="130" width="60" height="30" rx="4" class="conv-box" />
+                 <text x="160" y="150" class="text-conv">ShortConv</text>
 
-                 <rect x="350" y="130" width="60" height="30" rx="4" class="box-fill" />
-                 <text x="380" y="150" class="text-small">Value</text>
-                 
-                 <text x="495" y="150" class="text-small" style="fill:#00C2FF; font-weight:bold;">← Local Mixing</text>
+                 <text x="266" y="125" class="text-small" style="font-weight:bold;">K</text>
+                 <rect x="236" y="130" width="60" height="30" rx="4" class="conv-box" />
+                 <text x="266" y="150" class="text-conv">ShortConv</text>
+
+                 <text x="333" y="125" class="text-small" style="font-weight:bold;">V</text>
+                 <rect x="303" y="130" width="60" height="30" rx="4" class="conv-box" />
+                 <text x="333" y="150" class="text-conv">ShortConv</text>
+
+                 <text x="440" y="125" class="text-small" style="font-weight:bold;">Decay/G</text>
+                 <rect x="410" y="130" width="60" height="30" rx="4" class="box-fill" />
+                 <text x="440" y="150" class="text-small">Linear</text>
               </g>
 
-              <line x1="220" y1="160" x2="280" y2="200" class="path-line" />
-              <line x1="300" y1="160" x2="300" y2="200" class="path-line" />
-              <line x1="380" y1="160" x2="320" y2="200" class="path-line" />
+              <line x1="160" y1="160" x2="220" y2="210" class="path-line" />
+              <line x1="266" y1="160" x2="280" y2="210" class="path-line" />
+              <line x1="333" y1="160" x2="320" y2="210" class="path-line" />
+              <line x1="440" y1="160" x2="380" y2="210" class="path-line" />
 
-              <rect x="200" y="200" width="200" height="50" rx="4" class="box-stroke" style="fill:#0A2540;" />
-              <text x="300" y="230" class="text-label" style="fill:#fff;">Global Mixer (SSM/Attn)</text>
-              <text x="300" y="245" class="text-small" style="fill:#aaa;">Chunked Computation</text>
+              <rect x="180" y="210" width="240" height="50" rx="4" class="box-stroke" style="fill:#0A2540;" />
+              <text x="300" y="235" class="text-label" style="fill:#fff;">Global Mixer</text>
+              <text x="300" y="250" class="text-small" style="fill:#aaa;">(RetNet / Lightning / SSM)</text>
 
-              <line x1="300" y1="250" x2="300" y2="280" class="path-line" />
+              <line x1="300" y1="260" x2="300" y2="290" class="path-line" />
               
-              <rect x="250" y="280" width="100" height="30" rx="4" class="box-stroke" />
-              <text x="300" y="300" class="text-label">Output (y)</text>
+              <rect x="250" y="290" width="100" height="30" rx="4" class="box-stroke" />
+              <text x="300" y="310" class="text-label">Output (y)</text>
 
             </svg>
-            <span class="mini-caption">Figure 1: The standard parallel pipeline. The "Local Mixing" step is the bottleneck we target.</span>
+            <span class="mini-caption">Figure 1: The standard parallel pipeline (RetNet, Lightning Attention, etc.). The "Local Mixing" (ShortConv on Q, K, V) is the bottleneck we target.</span>
           </div>
 
           <h4 class="title is-5">The Standard Pipeline</h4>
           <ol>
-              <li><strong>Parallel Input Projection:</strong> Input $u$ passes through a large Linear layer producing all branches (Gate, Value, Key, etc.).</li>
-              <li><strong>Local Mixing (The Bottleneck):</strong> Each branch goes through a <code>Conv1d(k=2 or 4)</code> for local smoothing.</li>
-              <li><strong>Global Mixing (Chunked):</strong> The core mechanism (SSM, Linear Attn) processes data in chunks using Tensor Cores.</li>
+              <li><strong>Parallel Linear Projection:</strong> Input $u$ is projected into multiple branches (Query, Key, Value, Gate) simultaneously.</li>
+              <li><strong>Local Mixing (The Bottleneck):</strong> A fixed-kernel <code>Conv1d(k=4)</code> is applied independently to $Q$, $K$, and $V$ to provide local inductive bias.</li>
+              <li><strong>Global Mixing (Chunked):</strong> The processed branches enter the core retention or linear attention mechanism, computed via Tensor Cores in chunks (e.g., block size 128).</li>
           </ol>
 
           <div class="message is-warning" style="margin-top: 2rem;">
             <div class="message-body">
-              <strong>The Misalignment:</strong> The global mixer operates on chunks (typically $Q=64$ or $128$). We pay the memory cost to load a 128-token chunk into SRAM, yet we restrict the local receptive field to a convolution kernel spanning only 4 tokens. <strong>This wastes the opportunity provided by the hardware access pattern.</strong>
+              <strong>The Misalignment:</strong> While the Global Mixer loads a large chunk (128 tokens) into SRAM, the <strong>ShortConv</strong> on $Q, K, V$ acts as a blinder, restricting the local receptive field to just 4 tokens. We pay the memory cost for the full chunk but fail to utilize it for local mixing.
             </div>
           </div>
         </div>
