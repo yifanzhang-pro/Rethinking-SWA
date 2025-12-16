@@ -192,6 +192,7 @@
           <span class="pill">Sequence Modeling</span>
           <span class="pill">Hardware Efficiency</span>
           <span class="pill">Mamba / SSM</span>
+          <span class="pill">Linear Attention</span>
           <span class="pill">FlashAttention</span>
         </div>
       </div>
@@ -204,7 +205,7 @@
         <h2 class="title is-3 has-text-centered section-title">The Core Claim</h2>
         <div class="content has-text-justified" style="max-width:880px;">
           <p>
-            In the rapid evolution of efficient sequence modeling—whether modern RNNs, state space models (SSMs), linear attention, or even standard full attention—optimization efforts have largely focused on the <strong>global mixing mechanism</strong>. Yet, an inconspicuous legacy artifact remains: <strong>ShortConv</strong> (short convolution).
+            In the rapid evolution of efficient sequence modeling, whether modern RNNs, state space models (SSMs), linear attention, or even standard full attention, optimization efforts have largely focused on the <strong>global mixing mechanism</strong>. Yet, an inconspicuous legacy artifact remains: <strong>ShortConv</strong> (short convolution).
           </p>
           <div class="notification is-light is-info" style="border-left: 4px solid var(--primary-color);">
             <strong>The Argument:</strong> In an era where hardware-efficient algorithms (e.g., FlashAttention, SSD) mandate chunk-based computation, using convolutions with $k=3$ or $4$ is an architectural mismatch. Since we already split sequences into chunks (e.g., 64 or 128 tokens), we should replace ShortConv with <strong>Short Sliding Window Attention (ShortSWA)</strong>.
