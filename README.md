@@ -1,4 +1,6 @@
-# [Yifan's Blog] Rethinking SWA: Why Short Sliding Window Attention Will Replace ShortConv in Modern Architectures
+# [Yifan's Blog] Rethinking SWA
+
+### Why Short Sliding Window Attention Will Replace ShortConv in Modern Architectures 
 
 **Author:** Yifan Zhang  
 **Date:** December 16, 2025  
