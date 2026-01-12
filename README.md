@@ -113,7 +113,7 @@ If you want a one-line mental model: ShortConv is to ShortSWA what modern conv (
 ## Citation
 
 ```bibtex
-@article{zhang2025rethink,
+@article{zhang2025rethinking,
   title = {Rethinking SWA},
   author = {Zhang, Yifan},
   journal = {yifanzhang-pro.github.io},
